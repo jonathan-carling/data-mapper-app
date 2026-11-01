@@ -1,19 +1,17 @@
-using DataMapperApp.Configuration;
 using DataMapperApp.DataMappers;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-var appSettings = builder.Configuration.GetSection("AppSettings");
-builder.Services.Configure<AppSettings>(appSettings);
-
-var assembly = typeof(IDataMapper).Assembly;
-var type = assembly.ExportedTypes.First(x => x.Name == appSettings["DataMapperClassName"]);
-builder.Services.AddScoped(typeof(IDataMapper), type);
+builder.Services.AddDataMapper(builder.Configuration);
 
 var app = builder.Build();
+
+app.Logger.LogInformation(
+    "Active data mapper is {DataMapper}",
+    app.Configuration["AppSettings:DataMapperClassName"]);
 
 if (app.Environment.IsDevelopment())
 {

@@ -1,148 +1,108 @@
 ﻿namespace DataMapperApp.DataMappers
 {
+    using System.Data;
     using DataMapperApp.Configuration;
     using DataMapperApp.Helpers;
     using DataMapperApp.Models;
+    using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Options;
-    using System.Data.SqlClient;
 
     public class AdoNetDataMapper : DataMapper, IDataMapper
     {
         public AdoNetDataMapper(IOptions<AppSettings> options) : base(options)
         {
-            DataConnectionString = options.Value.DataConnectionString;
         }
 
-        public Entity? GetEntity(int id)
+        public async Task<Entity?> GetEntityAsync(int id, CancellationToken cancellationToken = default)
         {
-            Entity? entity = null;
-            var cmdText = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.SELECT,
-                id.ToString()
-            );
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = new SqlCommand(SqlCommandHelper.SelectById, connection);
+            command.Parameters.Add("@Id", SqlDbType.Int).Value = id;
 
-            using (var conn = new SqlConnection(DataConnectionString))
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(cmdText, conn))
-                {
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.HasRows)
-                        {
-                            reader.Read();
-                            entity = new Entity
-                            {
-                                Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                                Name = reader.GetString(reader.GetOrdinal("Name")),
-                                Created = reader.GetDateTime(reader.GetOrdinal("Created")),
-                                Updated = reader.GetDateTime(reader.GetOrdinal("Updated")),
-                            };
-                        }
-                    }
-                }
+                return null;
             }
 
-            return entity;
+            return ReadEntity(reader);
         }
 
-        public IEnumerable<Entity> GetEntities()
+        public async Task<IReadOnlyList<Entity>> GetEntitiesAsync(CancellationToken cancellationToken = default)
         {
-            List<Entity> entities = new List<Entity>();
-            var cmdText = SqlCommandHelper.BuildCommand(SqlCommandHelper.CommandType.SELECT_ALL);
+            var entities = new List<Entity>();
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = new SqlCommand(SqlCommandHelper.SelectAll, connection);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            using (var conn = new SqlConnection(DataConnectionString))
+            while (await reader.ReadAsync(cancellationToken))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(cmdText, conn))
-                {
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.HasRows)
-                        {
-                            while (reader.Read())
-                            {
-                                var entity = new Entity
-                                {
-                                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                                    Name = reader.GetString(reader.GetOrdinal("Name")),
-                                    Created = reader.GetDateTime(reader.GetOrdinal("Created")),
-                                    Updated = reader.GetDateTime(reader.GetOrdinal("Updated")),
-                                };
-                                entities.Add(entity);
-                            }
-                        }
-                    }
-                }
+                entities.Add(ReadEntity(reader));
             }
 
             return entities;
         }
 
-        public int CreateEntity(Entity entity)
+        public async Task<Entity> CreateEntityAsync(Entity entity, CancellationToken cancellationToken = default)
         {
-            int rowsAffected = 0;
+            var now = DateTime.UtcNow;
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = new SqlCommand(SqlCommandHelper.Insert, connection);
+            command.Parameters.Add("@Name", SqlDbType.NVarChar, Entity.NameMaxLength).Value = entity.Name;
+            command.Parameters.Add("@Created", SqlDbType.DateTime2).Value = now;
+            command.Parameters.Add("@Updated", SqlDbType.DateTime2).Value = now;
 
-            var dateTimeUtcNow = DateTime.UtcNow.ToString("s");
-            var cmdText = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.INSERT,
-                new string[] { entity.Name, dateTimeUtcNow, dateTimeUtcNow }
-            );
-
-            using (var conn = new SqlConnection(DataConnectionString))
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(cmdText, conn))
-                {
-                    rowsAffected = cmd.ExecuteNonQuery();
-                }
-
+                throw new InvalidOperationException("Insert did not return the new entity.");
             }
-            return rowsAffected;
+
+            return ReadEntity(reader);
         }
 
-        public int UpdateEntity(Entity entity)
+        public async Task<Entity?> UpdateEntityAsync(Entity entity, CancellationToken cancellationToken = default)
         {
-            int rowsAffected = 0;
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = new SqlCommand(SqlCommandHelper.Update, connection);
+            command.Parameters.Add("@Id", SqlDbType.Int).Value = entity.Id;
+            command.Parameters.Add("@Name", SqlDbType.NVarChar, Entity.NameMaxLength).Value = entity.Name;
+            command.Parameters.Add("@Updated", SqlDbType.DateTime2).Value = DateTime.UtcNow;
 
-            var dateTimeUtcNow = DateTime.UtcNow.ToString("s");
-            var cmdText = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.UPDATE,
-                new string[] { entity.Id.ToString(), entity.Name, dateTimeUtcNow, dateTimeUtcNow }
-            );
-
-            using (var conn = new SqlConnection(DataConnectionString))
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(cmdText, conn))
-                {
-                    rowsAffected = cmd.ExecuteNonQuery();
-                }
-
+                return null;
             }
-            return rowsAffected;
+
+            return ReadEntity(reader);
         }
 
-        public int DeleteEntity(int id)
+        public async Task<bool> DeleteEntityAsync(int id, CancellationToken cancellationToken = default)
         {
-            int rowsAffected = 0;
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = new SqlCommand(SqlCommandHelper.DeleteById, connection);
+            command.Parameters.Add("@Id", SqlDbType.Int).Value = id;
+            var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+            return rowsAffected > 0;
+        }
 
-            var dateTimeUtcNow = DateTime.UtcNow.ToString("s");
-            var cmdText = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.DELETE,
-                new string[] { id.ToString() }
-            );
+        private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
+        {
+            var connection = new SqlConnection(DataConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            return connection;
+        }
 
-            using (var conn = new SqlConnection(DataConnectionString))
+        private static Entity ReadEntity(SqlDataReader reader)
+        {
+            return new Entity
             {
-                conn.Open();
-                using (var cmd = new SqlCommand(cmdText, conn))
-                {
-                    rowsAffected = cmd.ExecuteNonQuery();
-                }
-
-            }
-            return rowsAffected;
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                Name = reader.GetString(reader.GetOrdinal("Name")),
+                Created = reader.GetDateTime(reader.GetOrdinal("Created")),
+                Updated = reader.GetDateTime(reader.GetOrdinal("Updated"))
+            };
         }
     }
 }

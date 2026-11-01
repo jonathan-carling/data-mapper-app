@@ -4,14 +4,14 @@
 
     public interface IDataMapper
     {
-        Entity? GetEntity(int id);
+        Task<Entity?> GetEntityAsync(int id, CancellationToken cancellationToken = default);
 
-        IEnumerable<Entity> GetEntities();
+        Task<IReadOnlyList<Entity>> GetEntitiesAsync(CancellationToken cancellationToken = default);
 
-        int CreateEntity(Entity entity);
+        Task<Entity> CreateEntityAsync(Entity entity, CancellationToken cancellationToken = default);
 
-        int UpdateEntity(Entity entity);
+        Task<Entity?> UpdateEntityAsync(Entity entity, CancellationToken cancellationToken = default);
 
-        int DeleteEntity(int id);
+        Task<bool> DeleteEntityAsync(int id, CancellationToken cancellationToken = default);
     }
 }

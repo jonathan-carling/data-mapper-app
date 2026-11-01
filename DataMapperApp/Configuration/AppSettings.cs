@@ -2,7 +2,10 @@
 {
     public class AppSettings
     {
-        public required string DataMapperClassName { get; set; }
-        public required string DataConnectionString { get; set; }
+        public const string SectionName = "AppSettings";
+
+        public string DataMapperClassName { get; set; } = "";
+
+        public string DataConnectionString { get; set; } = "";
     }
 }
