@@ -4,97 +4,63 @@
     using DataMapperApp.Configuration;
     using DataMapperApp.Helpers;
     using DataMapperApp.Models;
+    using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Options;
-    using System.Data.SqlClient;
 
     public class DapperDataMapper : DataMapper, IDataMapper
     {
         public DapperDataMapper(IOptions<AppSettings> options) : base(options)
         {
-            DataConnectionString = options.Value.DataConnectionString;
         }
 
-        public Entity? GetEntity(int id)
+        public async Task<Entity?> GetEntityAsync(int id, CancellationToken cancellationToken = default)
         {
-            Entity? entity;
-            var cmd = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.SELECT,
-                new string[] { id.ToString() }
-            );
-
-            using (var conn = new SqlConnection(DataConnectionString))
-            {
-                entity = conn.QuerySingleOrDefault<Entity>(cmd);
-            }
-
-            return entity;
+            await using var connection = new SqlConnection(DataConnectionString);
+            return await connection.QuerySingleOrDefaultAsync<Entity>(
+                new CommandDefinition(
+                    SqlCommandHelper.SelectById,
+                    new { Id = id },
+                    cancellationToken: cancellationToken));
         }
 
-        public IEnumerable<Entity> GetEntities()
+        public async Task<IReadOnlyList<Entity>> GetEntitiesAsync(CancellationToken cancellationToken = default)
         {
-            IEnumerable<Entity> entities;
-            var cmd = SqlCommandHelper.BuildCommand(SqlCommandHelper.CommandType.SELECT_ALL);
-
-            using (var conn = new SqlConnection(DataConnectionString))
-            {
-                entities = conn.Query<Entity>(cmd);
-            }
-
-            return entities;
+            await using var connection = new SqlConnection(DataConnectionString);
+            var entities = await connection.QueryAsync<Entity>(
+                new CommandDefinition(SqlCommandHelper.SelectAll, cancellationToken: cancellationToken));
+            return entities.ToList();
         }
 
-        public int CreateEntity(Entity entity)
+        public async Task<Entity> CreateEntityAsync(Entity entity, CancellationToken cancellationToken = default)
         {
-            int rowsAffected = 0;
-
-            var dateTimeUtcNow = DateTime.UtcNow.ToString("s");
-            var cmd = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.INSERT,
-                new string[] { entity.Name, dateTimeUtcNow, dateTimeUtcNow }
-            );
-
-            using (var conn = new SqlConnection(DataConnectionString))
-            {
-                rowsAffected = conn.Execute(cmd);
-            }
-
-            return rowsAffected;
+            var now = DateTime.UtcNow;
+            await using var connection = new SqlConnection(DataConnectionString);
+            return await connection.QuerySingleAsync<Entity>(
+                new CommandDefinition(
+                    SqlCommandHelper.Insert,
+                    new { entity.Name, Created = now, Updated = now },
+                    cancellationToken: cancellationToken));
         }
 
-        public int UpdateEntity(Entity entity)
+        public async Task<Entity?> UpdateEntityAsync(Entity entity, CancellationToken cancellationToken = default)
         {
-            int rowsAffected = 0;
-
-            var dateTimeUtcNow = DateTime.UtcNow.ToString("s");
-            var cmd = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.UPDATE,
-                new string[] { entity.Id.ToString(), entity.Name, dateTimeUtcNow, dateTimeUtcNow }
-            );
-
-            using (var conn = new SqlConnection(DataConnectionString))
-            {
-                rowsAffected = conn.Execute(cmd);
-            }
-
-            return rowsAffected;
+            await using var connection = new SqlConnection(DataConnectionString);
+            return await connection.QuerySingleOrDefaultAsync<Entity>(
+                new CommandDefinition(
+                    SqlCommandHelper.Update,
+                    new { entity.Id, entity.Name, Updated = DateTime.UtcNow },
+                    cancellationToken: cancellationToken));
         }
 
-        public int DeleteEntity(int id)
+        public async Task<bool> DeleteEntityAsync(int id, CancellationToken cancellationToken = default)
         {
-            int rowsAffected = 0;
-
-            var dateTimeUtcNow = DateTime.UtcNow.ToString("s");
-            var cmd = SqlCommandHelper.BuildCommand(
-                SqlCommandHelper.CommandType.DELETE,
-                new string[] { id.ToString() }
-            );
-
-            using (var conn = new SqlConnection(DataConnectionString))
-            {
-                rowsAffected = conn.Execute(cmd);
-            }
-
-            return rowsAffected;
+            await using var connection = new SqlConnection(DataConnectionString);
+            var rowsAffected = await connection.ExecuteAsync(
+                new CommandDefinition(
+                    SqlCommandHelper.DeleteById,
+                    new { Id = id },
+                    cancellationToken: cancellationToken));
+            return rowsAffected > 0;
         }
     }
 }

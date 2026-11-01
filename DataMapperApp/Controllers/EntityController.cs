@@ -15,47 +15,89 @@ namespace DataMapperApp.Controllers
             _dataMapper = dataMapper;
         }
 
-        [HttpGet("{id}", Name = "GetEntity")]
-        public Entity? Get(int id)
+        [HttpGet(Name = "GetEntities")]
+        [ProducesResponseType(typeof(IReadOnlyList<Entity>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IReadOnlyList<Entity>>> GetAll(CancellationToken cancellationToken)
         {
-            return _dataMapper.GetEntity(id);
+            var entities = await _dataMapper.GetEntitiesAsync(cancellationToken);
+            return Ok(entities);
         }
 
-        [HttpGet(Name = "GetEntities")]
-        public IEnumerable<Entity> GetAll()
+        [HttpGet("{id}", Name = "GetEntity")]
+        [ProducesResponseType(typeof(Entity), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<Entity>> Get(int id, CancellationToken cancellationToken)
         {
-            return _dataMapper.GetEntities();
+            var entity = await _dataMapper.GetEntityAsync(id, cancellationToken);
+            if (entity is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(entity);
         }
 
         [HttpPost(Name = "CreateEntity")]
-        public int Create(string name)
+        [ProducesResponseType(typeof(Entity), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<Entity>> Create(string? name, CancellationToken cancellationToken)
         {
-            return _dataMapper.CreateEntity(
-                new Entity
-                {
-                    Name = name
-                }
-            );
+            if (ValidateName(name) is { } error)
+            {
+                return error;
+            }
+
+            var entity = await _dataMapper.CreateEntityAsync(new Entity { Name = name! }, cancellationToken);
+            return CreatedAtAction(nameof(Get), new { id = entity.Id }, entity);
         }
 
         [HttpPut(Name = "UpdateEntity")]
-        public int UpdateEntity(int id, string name)
+        [ProducesResponseType(typeof(Entity), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<Entity>> Update(int id, string? name, CancellationToken cancellationToken)
         {
-            return _dataMapper.UpdateEntity(
-                new Entity
-                {
-                    Id = id,
-                    Name = name
-                }
-            );
+            if (ValidateName(name) is { } error)
+            {
+                return error;
+            }
+
+            var entity = await _dataMapper.UpdateEntityAsync(new Entity { Id = id, Name = name! }, cancellationToken);
+            if (entity is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(entity);
         }
 
         [HttpDelete(Name = "DeleteEntity")]
-        public int DeleteEntity(int id)
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
         {
-            return _dataMapper.DeleteEntity(id);
+            var deleted = await _dataMapper.DeleteEntityAsync(id, cancellationToken);
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
         }
 
+        private ActionResult? ValidateName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return BadRequest("Name is required.");
+            }
 
+            if (name.Length > Entity.NameMaxLength)
+            {
+                return BadRequest($"Name must be {Entity.NameMaxLength} characters or fewer.");
+            }
+
+            return null;
+        }
     }
 }

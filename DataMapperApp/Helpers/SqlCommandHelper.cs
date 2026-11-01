@@ -2,50 +2,34 @@
 {
     public static class SqlCommandHelper
     {
-        public enum CommandType
-        {
-            SELECT,
-            SELECT_ALL,
-            INSERT,
-            UPDATE,
-            DELETE
-        }
+        public const string SelectById = """
+            SELECT Id, Name, Created, Updated
+            FROM dbo.Entity
+            WHERE Id = @Id
+            """;
 
-        public static class CommandText
-        {
-            public static string ENTITY_RETRIEVE     = "SELECT * FROM Entity WHERE Id = {0}";
-            public static string ENTITY_RETRIEVE_ALL = "SELECT * FROM Entity";
-            public static string ENTITY_CREATE       = "INSERT INTO Entity (Name, Created, Updated) VALUES ('{0}', '{1}', '{2}')";
-            public static string ENTITY_UPDATE       = "UPDATE Entity SET Name = '{1}', Updated = '{2}' where Id = {0}";
-            public static string ENTITY_DELETE       = "DELETE FROM Entity WHERE Id = {0}";
-        }
+        public const string SelectAll = """
+            SELECT Id, Name, Created, Updated
+            FROM dbo.Entity
+            ORDER BY Id
+            """;
 
-        public static string BuildCommand(CommandType commandType, params string[] args)
-        {
-            string command = string.Empty;
+        public const string Insert = """
+            INSERT INTO dbo.Entity (Name, Created, Updated)
+            OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.Created, INSERTED.Updated
+            VALUES (@Name, @Created, @Updated)
+            """;
 
-            switch (commandType)
-            {
-                case CommandType.SELECT:
-                    command = string.Format(CommandText.ENTITY_RETRIEVE, args); ;
-                    break;
-                case CommandType.SELECT_ALL:
-                    command = CommandText.ENTITY_RETRIEVE_ALL;
-                    break;
-                case CommandType.INSERT:
-                    command = string.Format(CommandText.ENTITY_CREATE, args);
-                    break;
-                case CommandType.UPDATE:
-                    command = string.Format(CommandText.ENTITY_UPDATE, args);
-                    break;
-                case CommandType.DELETE:
-                    command = string.Format(CommandText.ENTITY_DELETE, args);
-                    break;
-                default:
-                    throw new NotImplementedException();
-            }
+        public const string Update = """
+            UPDATE dbo.Entity
+            SET Name = @Name, Updated = @Updated
+            OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.Created, INSERTED.Updated
+            WHERE Id = @Id
+            """;
 
-            return command;
-        }
+        public const string DeleteById = """
+            DELETE FROM dbo.Entity
+            WHERE Id = @Id
+            """;
     }
 }

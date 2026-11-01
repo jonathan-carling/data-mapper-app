@@ -5,7 +5,7 @@
 
     public abstract class DataMapper
     {
-        protected string DataConnectionString;
+        protected string DataConnectionString { get; }
 
         protected DataMapper(IOptions<AppSettings> options)
         {
